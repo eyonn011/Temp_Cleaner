@@ -5,16 +5,16 @@ from tkinter import messagebox
 from tkinter import ttk
 import getpass
 import threading
-import ctypes  # ✅ For admin check
+import ctypes
 
 # 📁 Folders to clean
 def get_clean_targets():
     user = getpass.getuser()
     return [
-        os.environ.get("TEMP"),                            # %TEMP%
-        f"C:/Users/{user}/AppData/Local/Temp",            # App temp
-        "C:/Windows/Temp",                                # System temp
-        "C:/Windows/Prefetch",                            # Prefetch
+        os.environ.get("TEMP"),
+        f"C:/Users/{user}/AppData/Local/Temp",
+        "C:/Windows/Temp",
+        "C:/Windows/Prefetch",
     ]
 
 # 📦 Count total items
@@ -27,6 +27,20 @@ def count_total_items(targets):
             total += len(dirs) + len(files)
     return total
 
+# 🔍 Get size in bytes of a file/folder
+def get_path_size(path):
+    total_size = 0
+    if os.path.isfile(path):
+        return os.path.getsize(path)
+    for dirpath, dirnames, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            try:
+                total_size += os.path.getsize(fp)
+            except:
+                pass
+    return total_size
+
 # 🧽 Clean files/folders with progress
 def clean_folders():
     threading.Thread(target=_clean_folders_thread).start()
@@ -34,6 +48,7 @@ def clean_folders():
 def _clean_folders_thread():
     deleted = 0
     errors = 0
+    freed_space_bytes = 0
     targets = get_clean_targets()
     total_items = count_total_items(targets)
     cleaned_items = 0
@@ -50,6 +65,10 @@ def _clean_folders_thread():
             for name in files:
                 file_path = os.path.join(root, name)
                 try:
+                    freed_space_bytes += os.path.getsize(file_path)
+                except:
+                    pass
+                try:
                     os.remove(file_path)
                     deleted += 1
                 except:
@@ -60,6 +79,10 @@ def _clean_folders_thread():
             for name in dirs:
                 dir_path = os.path.join(root, name)
                 try:
+                    freed_space_bytes += get_path_size(dir_path)
+                except:
+                    pass
+                try:
                     shutil.rmtree(dir_path, ignore_errors=True)
                     deleted += 1
                 except:
@@ -69,7 +92,18 @@ def _clean_folders_thread():
 
     progress_bar['value'] = 100
     percent_label.config(text="100%")
-    messagebox.showinfo("Done ✅", f"Cleaned {deleted} items\nErrors: {errors}")
+    messagebox.showinfo("Done ✅", f"Cleaned {deleted} items\n"
+                                   f"Errors: {errors}\n"
+                                   f"Freed: {convert_size(freed_space_bytes)}")
+
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    i = int((len(str(size_bytes)) - 1) / 3)
+    p = 1024 ** i
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"
 
 def update_progress(current, total):
     percent = int((current / total) * 100)
@@ -87,7 +121,7 @@ def is_admin():
 # 🖥️ GUI Setup
 app = tk.Tk()
 app.title("🧹 Advanced Temp File Cleaner")
-app.geometry("380x300")
+app.geometry("380x320")
 app.resizable(False, False)
 
 tk.Label(app, text="🧼 Clean System Junk", font=("Segoe UI", 16, "bold")).pack(pady=10)
